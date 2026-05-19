@@ -1,3 +1,37 @@
+# Secretos locales — el template versionado es .env.example
 .env
+.env.local
+.env.*.local
+
+# Inventario real de dominios. El template versionado es
+# configs/static_domains.example.yaml. Cada deploy mantiene su propio
+# static_domains.yaml fuera del repo.
+configs/static_domains.yaml
+
+# Estado runtime (corre vacío en cada deploy; en Lambda vive en S3)
 state/
+
+# Binarios compilados
 /auto-certs
+/bootstrap
+/cmd/*/bootstrap
+
+# AWS SAM build artifacts
+.aws-sam/
+
+# Go testing
+*.test
+coverage.out
+coverage.html
+cpu.prof
+mem.prof
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor swap files (no commiteo .vscode/ ni .idea/ por defecto; cada uno
+# decide si commitearlos según preferencia de equipo)
+*.swp
+*.swo
+*~

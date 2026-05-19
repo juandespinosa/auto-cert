@@ -1,0 +1,51 @@
+# Plantilla. Copiar a static_domains.yaml (gitignored) y editar con los
+# dominios reales.
+#
+# Estructura: `groups:` agrupa por registrar (source). Cada grupo lleva su
+# propio `source:` y todos los dominios del grupo lo heredan; el HTML del
+# correo separa los counters por origen.
+#
+# Campos por entrada:
+#   name             FQDN del apex (siempre requerido)
+#   expiry_fallback  fecha. Acepta YYYY-MM-DD (ISO) o DD-MM-YYYY. Si RDAP
+#                    falla para el dominio se usa esta fecha. Si RDAP
+#                    funciona, se COMPARA con esta y se dispara una alerta
+#                    de inconsistencia si difieren más que la tolerancia
+#                    configurada en rdap.mismatch_tolerance_days.
+#   subdomains       lista de prefijos que se expanden como dominios
+#                    separados (heredan port y source, NO heredan
+#                    expiry_fallback — un dominio se renueva una vez para
+#                    todos sus subdominios).
+#
+# También se soporta `domains:` plano en la raíz (source = "static") para
+# compatibilidad con archivos viejos.
+
+groups:
+  # Ejemplo 1: registrador sin API pública (mi.com.co, NetworkSolutions, etc).
+  # El expiry_fallback es OBLIGATORIO solo si el TLD no tiene endpoint RDAP
+  # (caso típico: .co, .com.co, algunos ccTLDs). Para TLDs con RDAP (.com,
+  # .org, .net, .es, ...) el fallback es opcional — sirve como comparación
+  # contra RDAP para detectar inconsistencias.
+  - source: ejemplo-registrar-1
+    domains:
+      - name: example.com
+        expiry_fallback: 2027-03-15        # ISO 8601
+        subdomains: [www, api]
+      - name: example.com.co               # .com.co no tiene RDAP → fallback obligatorio
+        expiry_fallback: 15-03-2027        # DD-MM-YYYY (también acepta)
+
+  # Ejemplo 2: otro registrador. Un dominio sin subdominios + uno con varios.
+  - source: ejemplo-registrar-2
+    domains:
+      - name: otro-ejemplo.net
+        expiry_fallback: 2026-09-01
+      - name: ejemplo-multi.com
+        expiry_fallback: 2026-12-20
+        subdomains: [www, app, autodiscover, enterpriseenrollment]
+
+# Layout alternativo (flat, source = "static" por default). Se puede combinar
+# con `groups:` arriba; ambos cargan en la misma corrida.
+#
+# domains:
+#   - name: ejemplo-flat.com
+#     expiry_fallback: 2027-01-15
