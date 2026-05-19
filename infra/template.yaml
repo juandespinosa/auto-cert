@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: auto-certs — TLS + domain expiry monitor (Lambda on EventBridge cron)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, prod]
+    Description: Stage suffix (lower-case); used in resource names and SSM path.
+
+  ScheduleExpression:
+    Type: String
+    Default: cron(0 14 * * ? *)
+    Description: |
+      EventBridge schedule. Examples:
+      - cron(0 14 * * ? *)      → daily 9am Bogotá (14:00 UTC)
+      - cron(0 14 1 * ? *)      → monthly day 1, 9am Bogotá
+      - rate(1 day)             → every 24h from first run
+
+  SesFromAddress:
+    Type: String
+    Description: Verified SES identity to send from (e.g. alerts@bodytechcorp.com).
+
+  SesToAddress:
+    Type: String
+    Description: Recipient address (comma-separated for multiple).
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 7, 14, 30, 60, 90, 180, 365]
+
+Globals:
+  Function:
+    Timeout: 300                # 5 min — plenty for ~150 domains
+    MemorySize: 512             # more RAM = more CPU = less wall time
+    Architectures: [arm64]      # Graviton2 → 20% cheaper than x86
+    Runtime: provided.al2023
+    Tracing: Active
+    Environment:
+      Variables:
+        CONFIG_PATH: /var/task/config.lambda.yaml
+        SSM_PREFIX: !Sub /auto-certs/${Environment}/
+        STATE_BUCKET: !Ref StateBucket
+        STATE_KEY: !Sub auto-certs/${Environment}/state/alerts.json
+        INVENTORY_PREFIX: !Sub auto-certs/${Environment}/inventory/
+        RDAP_CACHE_KEY: !Sub auto-certs/${Environment}/cache/rdap.json
+        SES_FROM: !Ref SesFromAddress
+        SES_TO: !Ref SesToAddress
+
+Resources:
+
+  # ── S3 bucket for state + inventory snapshots ────────────────────────────
+  StateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain      # never auto-delete state on stack tear-down
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub auto-certs-${Environment}-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldInventorySnapshots
+            Status: Enabled
+            Prefix: !Sub auto-certs/${Environment}/inventory/
+            ExpirationInDays: 90    # keep ~3 months of daily snapshots
+          - Id: ExpireOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+
+  # ── Lambda function ─────────────────────────────────────────────────────
+  MonitorFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      FunctionName: !Sub auto-certs-${Environment}
+      CodeUri: ../
+      Handler: bootstrap
+      Description: Discovers domains, checks TLS + RDAP, sends digest via SES.
+      Policies:
+        # Route53: list-only, no write.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - route53:ListHostedZones
+                - route53:ListResourceRecordSets
+                - route53domains:ListDomains
+              Resource: '*'
+        # S3: read/write only this bucket.
+        - Statement:
+            - Effect: Allow
+              Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+              Resource: !Sub ${StateBucket.Arn}/*
+            - Effect: Allow
+              Action: [s3:ListBucket]
+              Resource: !GetAtt StateBucket.Arn
+        # SSM: read parameters under our prefix only.
+        - Statement:
+            - Effect: Allow
+              Action: [ssm:GetParametersByPath, ssm:GetParameter, ssm:GetParameters]
+              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/auto-certs/${Environment}/*
+        # KMS: decrypt SecureString params (default AWS-managed key).
+        - Statement:
+            - Effect: Allow
+              Action: [kms:Decrypt]
+              Resource: !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+        # SES: send only as the verified from address.
+        - Statement:
+            - Effect: Allow
+              Action: [ses:SendEmail, ses:SendRawEmail]
+              Resource: !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/*
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref ScheduleExpression
+            Description: auto-certs daily run
+
+  MonitorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/auto-certs-${Environment}
+      RetentionInDays: !Ref LogRetentionDays
+
+  # ── SSM parameters (created empty; fill values via console / CLI after deploy)
+  #
+  # These are TEMPLATES. SecureString cannot be created with empty value via
+  # CloudFormation, so we create plain String placeholders. After first deploy
+  # run:
+  #   aws ssm put-parameter --name /auto-certs/prod/NAMECOM_TOKEN \
+  #     --type SecureString --value '<real-token>' --overwrite
+  # to upgrade them.
+  ParamNamecomUsername:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /auto-certs/${Environment}/NAMECOM_USERNAME
+      Type: String
+      Value: PLACEHOLDER
+      Description: Name.com API username. Set real value with `aws ssm put-parameter --overwrite`.
+
+  ParamNamecomToken:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /auto-certs/${Environment}/NAMECOM_TOKEN
+      Type: String                   # upgrade to SecureString post-deploy
+      Value: PLACEHOLDER
+      Description: Name.com API token (rotate to SecureString manually).
+
+  ParamNamecomBaseURL:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /auto-certs/${Environment}/NAMECOM_BASE_URL
+      Type: String
+      Value: https://api.name.com
+
+  ParamHealthcheckURL:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /auto-certs/${Environment}/HEALTHCHECK_URL
+      Type: String
+      Value: ""
+      Description: |
+        Optional deadman ping URL (healthchecks.io / cronitor.io / self-host).
+        Leave empty to disable. Set via:
+          aws ssm put-parameter --name /auto-certs/prod/HEALTHCHECK_URL \
+            --type String --value 'https://hc-ping.com/<uuid>' --overwrite
+
+Outputs:
+  FunctionName:
+    Value: !Ref MonitorFunction
+  StateBucketName:
+    Value: !Ref StateBucket
+  SSMPrefix:
+    Value: !Sub /auto-certs/${Environment}/
+  NextSteps:
+    Value: |
+      1. Verify SES identity for the From address (SES console > Verified identities).
+      2. Replace SSM placeholders with real values, rotating to SecureString:
+         aws ssm put-parameter --name /auto-certs/prod/NAMECOM_TOKEN \
+           --type SecureString --value '<real>' --overwrite
+      3. Test invocation:
+         aws lambda invoke --function-name auto-certs-prod /tmp/out.json
+      4. Tail logs:
+         sam logs --stack-name auto-certs --tail

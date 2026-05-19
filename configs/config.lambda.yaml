@@ -1,0 +1,81 @@
+# Config para Lambda (cmd/lambda). Se bundlea con el binario en /var/task/.
+#
+# Diferencias vs config.yaml local:
+#   - secrets.backend: ssm (lee de SSM Parameter Store, no de .env)
+#   - notifier.backend: ses (usa AWS SES, no SMTP genérico)
+#   - state.backend: s3
+#   - inventory.backend: s3 (un objeto por día bajo key_prefix)
+#
+# Los nombres ${VAR} se resuelven contra el entorno DESPUÉS de que SSM cargó
+# los parámetros. El SAM template setea los nombres de bucket y prefix vía
+# env vars al deploy.
+
+discovery:
+  route53:
+    enabled: true
+    # region/profile vacíos: el SDK toma AWS_REGION del entorno Lambda y
+    # las credenciales del IAM role asignado.
+    region: ${AWS_REGION}
+    exclude_zones:
+      - mailing.bodytechperu.com
+  cloudflare:
+    enabled: false
+    api_token: ${CLOUDFLARE_API_TOKEN}
+  namecom:
+    enabled: true
+    username: ${NAMECOM_USERNAME}
+    token: ${NAMECOM_TOKEN}
+    base_url: ${NAMECOM_BASE_URL}
+  static:
+    enabled: true
+    path: /var/task/static_domains.yaml
+
+tls:
+  timeout: 10s
+  workers: 30
+  default_port: 443
+
+rdap:
+  enrich_workers: 5
+  mismatch_tolerance_days: 1
+  cache:
+    backend: s3
+    ttl: 168h
+    s3:
+      bucket: ${STATE_BUCKET}
+      key: ${RDAP_CACHE_KEY}    # ej. auto-certs/prod/cache/rdap.json
+      region: ${AWS_REGION}
+
+thresholds: [30, 15, 7, 3]
+
+secrets:
+  backend: ssm
+  ssm_prefix: ${SSM_PREFIX}      # ej. /auto-certs/prod/
+  ssm_region: ${AWS_REGION}
+
+notifier:
+  backend: ses
+  ses:
+    from: ${SES_FROM}
+    to:
+      - ${SES_TO}
+    region: ${AWS_REGION}
+
+state:
+  backend: s3
+  s3:
+    bucket: ${STATE_BUCKET}
+    key: ${STATE_KEY}            # ej. auto-certs/state/alerts.json
+    region: ${AWS_REGION}
+
+inventory:
+  backend: s3
+  s3:
+    bucket: ${STATE_BUCKET}
+    key_prefix: ${INVENTORY_PREFIX} # ej. auto-certs/inventory/
+    region: ${AWS_REGION}
+
+# Deadman switch en Lambda: la URL viene de SSM (cargado al startup).
+healthcheck:
+  url: ${HEALTHCHECK_URL}
+  timeout: 5s

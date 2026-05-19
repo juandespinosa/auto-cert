@@ -1,0 +1,76 @@
+# Dominios sin API de registrar (ej. mi.com.co, Marcaria, NetworkSolutions).
+#
+# Estructura: `groups:` agrupa por registrar (source). Cada grupo lleva su
+# propio `source:` y todos los dominios del grupo lo heredan; el HTML del
+# correo separa los counters por origen.
+#
+# Campos por entrada:
+#   name             FQDN del apex (siempre requerido)
+#   expiry_fallback  fecha. Acepta YYYY-MM-DD (ISO) o DD-MM-YYYY. Si RDAP falla
+#                    para el dominio se usa esta fecha. Si RDAP funciona, se
+#                    COMPARA con esta y se dispara una alerta de mismatch si
+#                    difieren más de 1 día.
+#   subdomains       lista de prefijos que se expanden como dominios separados
+#                    (heredan port y source, NO heredan expiry_fallback).
+#
+# También se soporta `domains:` plano en la raíz (source = "static") para
+# compatibilidad con archivos viejos.
+
+groups:
+  - source: mi.com.co
+    domains:
+      - name: lifebodytech.com
+        expiry_fallback: 2026-12-12
+        subdomains: [www]
+      - name: athleticgym.com.co
+        expiry_fallback: 2027-03-20
+        subdomains: [admin, api, bi, dev.admin, dev.api, develop, myathletic]
+      - name: bodytech.com.co
+        expiry_fallback: 2027-04-09
+      - name: drbodytech.co
+        expiry_fallback: 12-12-2026
+
+  - source: networksolutions.com
+    domains:
+      - name: bodytechcorp.com
+        expiry_fallback: 16-06-2027
+      - name: bodytechcorp.online
+        expiry_fallback: 14-03-2027
+        subdomains: [www]
+      - name: bodytechperu.com
+        expiry_fallback: 07-11-2026
+
+  - source: marcaria.com
+    domains:
+      - name: bodytech.com.es
+        expiry_fallback: 09-06-2026
+        subdomains: [www]
+      - name: bodytechargentina.com
+        expiry_fallback: 01-07-2026
+        subdomains: [www]
+      - name: bodytechbrasil.com
+        expiry_fallback: 01-07-2026
+        subdomains: [www]
+      - name: bodytechchile.com
+        expiry_fallback: 01-07-2026
+        subdomains: [www, enterpriseenrollment, autodiscover, lyncdiscover, sip, enterpriseregistration, msoid]
+      - name: bodytechcostarica.com
+        expiry_fallback: 01-07-2026
+        subdomains: [www]
+      - name: bodytechecuador.com
+        expiry_fallback: 01-07-2026
+        subdomains: [www]
+      - name: bodytechgym.net
+        expiry_fallback: 17-06-2026
+        subdomains: [www]
+      - name: mybodytech.net
+        expiry_fallback: 17-06-2026
+        subdomains: [www]
+      - name: bodytechmexico.com
+        expiry_fallback: 01-07-2026
+        subdomains: [www]
+      - name: bodytechpanama.com
+        expiry_fallback: 01-07-2026
+        subdomains: [www]
+      - name: grupobodytech.com
+        expiry_fallback: 03-07-2026
