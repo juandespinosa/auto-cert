@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -226,4 +227,26 @@ func (c *Config) applyDefaults() {
 	if c.Inventory.Path == "" {
 		c.Inventory.Path = "state/inventory.json"
 	}
+
+	// Cualquier entrada `to:` puede venir como una sola string con varias
+	// direcciones separadas por coma (típico cuando el YAML expande un único
+	// ${SMTP_TO} env var con CSV). Lo expandimos a [] de strings limpios.
+	c.Notifier.SMTP.To = flattenCSV(c.Notifier.SMTP.To)
+	c.Notifier.SES.To = flattenCSV(c.Notifier.SES.To)
+}
+
+// flattenCSV expande entradas con valores separados por coma y descarta los
+// vacíos / con solo whitespace. Útil para configurar listas vía un único
+// env var (ej. SMTP_TO=a@x.com,b@x.com).
+func flattenCSV(list []string) []string {
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		for _, p := range strings.Split(item, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }

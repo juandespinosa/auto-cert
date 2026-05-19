@@ -51,7 +51,7 @@ secrets:
 # Por defecto local hace dryrun (escribe HTML a state/last-email.html). Para
 # probar SMTP real, cambiar backend a "smtp" y completar las credenciales.
 notifier:
-  backend: dryrun
+  backend: smtp
   dryrun:
     html_path: state/last-email.html
   smtp:
