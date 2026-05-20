@@ -51,12 +51,28 @@ func (s *S3Sink) Save(snap Snapshot) error {
 	if err != nil {
 		return fmt.Errorf("inventory marshal: %w", err)
 	}
-	key := s.KeyPrefix + snap.GeneratedAt.UTC().Format("2006-01-02") + ".json"
-	_, err = s.client.PutObject(s.ctx, &s3.PutObjectInput{
+	base := s.KeyPrefix + snap.GeneratedAt.UTC().Format("2006-01-02")
+	if err := s.put(base+".json", data, "application/json"); err != nil {
+		return err
+	}
+
+	xlsxData, err := MarshalXLSX(snap)
+	if err != nil {
+		return fmt.Errorf("inventory xlsx: %w", err)
+	}
+	if err := s.put(base+".xlsx", xlsxData,
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *S3Sink) put(key string, data []byte, contentType string) error {
+	_, err := s.client.PutObject(s.ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.Bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(data),
-		ContentType: aws.String("application/json"),
+		ContentType: aws.String(contentType),
 	})
 	if err != nil {
 		return fmt.Errorf("s3 put %s/%s: %w", s.Bucket, key, err)

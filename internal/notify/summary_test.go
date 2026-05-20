@@ -155,19 +155,24 @@ func TestBuildSummary_AlertedTakesPriorityOverErrored(t *testing.T) {
 	}
 }
 
-func TestBuildSummary_BySourceSorted(t *testing.T) {
+func TestBuildSummary_BySourceSortedByTotalDesc(t *testing.T) {
 	now := tDate("2026-05-19")
 	domains := []model.Domain{
-		{Name: "z.com", Source: "zzz"},
-		{Name: "a.com", Source: "aaa"},
-		{Name: "m.com", Source: "mmm"},
+		// big=3, mid=2, tie_a=1, tie_b=1
+		{Name: "1.big.com", Source: "big"},
+		{Name: "2.big.com", Source: "big"},
+		{Name: "3.big.com", Source: "big"},
+		{Name: "1.mid.com", Source: "mid"},
+		{Name: "2.mid.com", Source: "mid"},
+		{Name: "x.com", Source: "tie_b"},
+		{Name: "y.com", Source: "tie_a"},
 	}
 	s := BuildSummary(now, domains, nil, nil)
-	want := []string{"aaa", "mmm", "zzz"}
+	want := []string{"big", "mid", "tie_a", "tie_b"} // total desc; alfa desempata
 	for i, ss := range s.BySource {
 		if ss.Source != want[i] {
-			t.Errorf("BySource[%d] = %q, want %q (must be alphabetical)",
-				i, ss.Source, want[i])
+			t.Errorf("BySource[%d] = %q (total=%d), want %q",
+				i, ss.Source, ss.Total, want[i])
 		}
 	}
 }

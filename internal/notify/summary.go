@@ -100,7 +100,14 @@ func BuildSummary(now time.Time, domains []model.Domain, certs []model.CertInfo,
 	for _, ss := range bySource {
 		sources = append(sources, *ss)
 	}
-	sort.Slice(sources, func(i, j int) bool { return sources[i].Source < sources[j].Source })
+	// Total desc, alfabético como desempate: el lector escanea primero los
+	// orígenes más grandes (los que más cobertura aportan).
+	sort.Slice(sources, func(i, j int) bool {
+		if sources[i].Total != sources[j].Total {
+			return sources[i].Total > sources[j].Total
+		}
+		return sources[i].Source < sources[j].Source
+	})
 	s.BySource = sources
 	return s
 }

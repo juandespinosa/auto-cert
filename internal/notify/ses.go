@@ -44,7 +44,7 @@ func NewSES(ctx context.Context, from string, to []string, region string) (*SES,
 	}, nil
 }
 
-func (s *SES) Notify(alerts []model.Alert, summary Summary) error {
+func (s *SES) Notify(alerts []model.Alert, summary Summary, attachments []Attachment) error {
 	if len(alerts) == 0 {
 		return nil
 	}
@@ -52,32 +52,42 @@ func (s *SES) Notify(alerts []model.Alert, summary Summary) error {
 	subject, plain := Render(alerts, summary, now)
 	htmlBody := RenderHTML(alerts, summary, now)
 
-	_, err := s.client.SendEmail(s.ctx, &sesv2.SendEmailInput{
-		FromEmailAddress: aws.String(s.From),
-		Destination: &sestypes.Destination{
-			ToAddresses: s.To,
-		},
-		Content: &sestypes.EmailContent{
-			Simple: &sestypes.Message{
-				Subject: &sestypes.Content{
-					Data:    aws.String(subject),
-					Charset: aws.String("UTF-8"),
-				},
-				Body: &sestypes.Body{
-					Text: &sestypes.Content{
-						Data:    aws.String(plain),
-						Charset: aws.String("UTF-8"),
-					},
-					Html: &sestypes.Content{
-						Data:    aws.String(htmlBody),
-						Charset: aws.String("UTF-8"),
+	// Simple no soporta adjuntos: cuando los hay usamos Raw con el mismo MIME
+	// que SMTP. Sin adjuntos usamos Simple porque SES setea From/To/Subject
+	// limpio (sin que tengamos que armar los headers a mano).
+	if len(attachments) == 0 {
+		_, err := s.client.SendEmail(s.ctx, &sesv2.SendEmailInput{
+			FromEmailAddress: aws.String(s.From),
+			Destination:      &sestypes.Destination{ToAddresses: s.To},
+			Content: &sestypes.EmailContent{
+				Simple: &sestypes.Message{
+					Subject: &sestypes.Content{Data: aws.String(subject), Charset: aws.String("UTF-8")},
+					Body: &sestypes.Body{
+						Text: &sestypes.Content{Data: aws.String(plain), Charset: aws.String("UTF-8")},
+						Html: &sestypes.Content{Data: aws.String(htmlBody), Charset: aws.String("UTF-8")},
 					},
 				},
 			},
+		})
+		if err != nil {
+			return fmt.Errorf("ses send: %w", err)
+		}
+		return nil
+	}
+
+	raw, err := BuildMIME(s.From, s.To, subject, plain, htmlBody, attachments)
+	if err != nil {
+		return fmt.Errorf("ses build raw: %w", err)
+	}
+	_, err = s.client.SendEmail(s.ctx, &sesv2.SendEmailInput{
+		FromEmailAddress: aws.String(s.From),
+		Destination:      &sestypes.Destination{ToAddresses: s.To},
+		Content: &sestypes.EmailContent{
+			Raw: &sestypes.RawMessage{Data: raw},
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("ses send: %w", err)
+		return fmt.Errorf("ses send raw: %w", err)
 	}
 	return nil
 }

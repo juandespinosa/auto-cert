@@ -110,15 +110,28 @@ func Run(ctx context.Context, deps Deps) (err error) {
 	}
 	slog.Info("alerts after dedup", "fresh", len(fresh), "suppressed", len(alerts)-len(fresh))
 
+	// El state filter solo decide SI mandar correo (evita spam cuando nada
+	// cambió). El contenido del correo debe ser el cuadro completo de
+	// alertas vigentes, no solo las nuevas — así el destinatario ve siempre
+	// el estado actual y no tiene que correlacionar emails históricos.
 	if len(fresh) == 0 {
 		slog.Info("no fresh alerts; nothing to send")
 		return nil
 	}
 
-	if err := deps.Notifier.Notify(fresh, summary); err != nil {
+	attachments, err := buildAttachments(snap)
+	if err != nil {
+		slog.Warn("attachment build failed; sending email without it", "err", err)
+		attachments = nil
+	}
+	if err := deps.Notifier.Notify(alerts, summary, attachments); err != nil {
 		return fmt.Errorf("notify: %w", err)
 	}
-	slog.Info("alerts delivered", "count", len(fresh))
+	slog.Info("alerts delivered",
+		"shown_in_email", len(alerts),
+		"new_in_this_run", len(fresh),
+		"attachments", len(attachments),
+	)
 
 	if !deps.DryRunSkipsStateSave {
 		if err := deps.State.Save(fresh); err != nil {
@@ -126,6 +139,22 @@ func Run(ctx context.Context, deps Deps) (err error) {
 		}
 	}
 	return nil
+}
+
+// buildAttachments arma los adjuntos del correo a partir del snapshot. Hoy es
+// solo el inventario en .xlsx para consumo no-técnico; agregar nuevos
+// formatos (PDF, CSV legado) cabe acá sin tocar al notifier.
+func buildAttachments(snap inventory.Snapshot) ([]notify.Attachment, error) {
+	xlsx, err := inventory.MarshalXLSX(snap)
+	if err != nil {
+		return nil, fmt.Errorf("inventory xlsx: %w", err)
+	}
+	filename := "auto-certs-inventario-" + snap.GeneratedAt.UTC().Format("2006-01-02") + ".xlsx"
+	return []notify.Attachment{{
+		Filename:    filename,
+		ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		Data:        xlsx,
+	}}, nil
 }
 
 func buildDiscoverers(cfg *config.Config) []discovery.Discoverer {
