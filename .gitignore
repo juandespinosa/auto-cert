@@ -8,16 +8,16 @@
 # static_domains.yaml fuera del repo.
 configs/static_domains.yaml
 
-# Estado runtime (corre vacío en cada deploy; en Lambda vive en S3)
-state/
+# Estado runtime (alerts.json, inventory.json/xlsx, cron-logs, etc.).
+# Slash inicial = anclado a raíz del repo. SIN el slash inicial, el patrón
+# también matchearía internal/state/ y dejaría sin commitear el código de
+# ese paquete (regresión real que pasó en el clone inicial). NO QUITAR.
+/state/
 
 # Binarios compilados
 /auto-certs
 /bootstrap
 /cmd/*/bootstrap
-
-# AWS SAM build artifacts
-.aws-sam/
 
 # Go testing
 *.test
