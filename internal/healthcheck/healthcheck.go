@@ -1,8 +1,8 @@
 // Package healthcheck pings a deadman-switch URL at the end of every
 // successful run. The remote service (healthchecks.io, cronitor.io, a
 // self-hosted endpoint) raises an alert if the ping doesn't arrive on
-// schedule — that catches "EventBridge stopped triggering" or "Lambda
-// permissions broke" cases where the monitor goes silent and nobody knows.
+// schedule — that catches "el cron dejó de disparar" o "el server se
+// reinició y nadie reactivó el cron" cases donde el monitor se queda mudo.
 //
 // The package is intentionally tiny: one GET (or POST for /fail). No retries,
 // no exotic options. If the ping itself fails we log a warning but don't

@@ -1,7 +1,6 @@
 // Package inventory writes a snapshot of every monitored domain plus its
-// cert + registry data + computed alerts. Storage is pluggable (FileSink for
-// local dev, S3Sink for Lambda) so the snapshot can be archived for
-// historical comparison or consumed by downstream scripts.
+// cert + registry data + computed alerts. Backend: FileSink (JSON + XLSX
+// en disco, overwrite cada run).
 package inventory
 
 import (

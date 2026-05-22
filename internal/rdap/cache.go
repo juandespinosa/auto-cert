@@ -11,8 +11,7 @@ import (
 
 // Cache stores successful RDAP lookups keyed by lowercased domain. Errors
 // are never cached — a transient failure shouldn't persist for the TTL.
-// Implementations decide where the cached values live (none, filesystem, S3)
-// and when to load/flush them.
+// Backends actuales: NoopCache (disabled) y FileCache (JSON en disco).
 type Cache interface {
 	Get(domain string) (*model.DomainInfo, bool)
 	Set(domain string, info *model.DomainInfo)
@@ -52,9 +51,9 @@ func (NoopCache) Get(string) (*model.DomainInfo, bool)        { return nil, fals
 func (NoopCache) Set(string, *model.DomainInfo)               {}
 func (NoopCache) Flush(context.Context) error                 { return nil }
 
-// cachedEntry is the on-disk / on-S3 representation. We do NOT store Err
-// (cache misses already model that) and we omit IsApex / FallbackExpected
-// since those are recomputed per-run.
+// cachedEntry is the on-disk representation. We do NOT store Err (cache
+// misses already model that) y omitimos IsApex / FallbackExpected porque se
+// recalculan en cada corrida.
 type cachedEntry struct {
 	Domain    string    `json:"domain"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -72,14 +71,13 @@ func (e cachedEntry) toInfo() *model.DomainInfo {
 	}
 }
 
-// cacheFile is the JSON shape on disk / in S3.
+// cacheFile is the JSON shape on disk.
 type cacheFile struct {
 	Entries []cachedEntry `json:"entries"`
 }
 
-// memBackend is the shared in-process map used by FileCache and S3Cache.
-// It tracks whether anything changed since the last load so Flush can skip
-// the write when nothing happened.
+// memBackend is the shared in-process map used by FileCache. Tracks dirty
+// flag so Flush puede saltarse el write si nada cambió en esta corrida.
 type memBackend struct {
 	ttl     time.Duration
 	mu      sync.RWMutex

@@ -56,6 +56,12 @@ type NameComConfig struct {
 	BaseURL  string `yaml:"base_url"`
 }
 
+// Nota: este proyecto se quedó on-prem. Backends de Lambda (state.s3,
+// inventory.s3, rdap.cache.s3, notifier.ses, secrets.ssm_*) se removieron.
+// Los campos de configuración asociados también se eliminaron acá; el git
+// history conserva la versión multi-backend si en algún momento se
+// re-introduce el soporte cloud.
+
 type StaticConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path"`
@@ -85,33 +91,24 @@ type RDAPConfig struct {
 }
 
 type RDAPCacheConfig struct {
-	Backend string         `yaml:"backend"` // "none" (default) | "file" | "s3"
-	TTL     time.Duration  `yaml:"ttl"`     // default 168h (7 días)
-	Path    string         `yaml:"path"`    // si backend=file
-	S3      RDAPCacheS3    `yaml:"s3"`      // si backend=s3
+	Backend string        `yaml:"backend"` // "none" (default) | "file"
+	TTL     time.Duration `yaml:"ttl"`     // default 168h (7 días)
+	Path    string        `yaml:"path"`    // si backend=file
 }
 
-type RDAPCacheS3 struct {
-	Bucket string `yaml:"bucket"`
-	Key    string `yaml:"key"`
-	Region string `yaml:"region"`
-}
-
-// SecretsConfig — backend "env" reads .env at startup (local). "ssm" reads
-// every parameter under SSMPrefix and exports them as env vars (Lambda).
+// SecretsConfig — el único backend soportado es "env" (lee .env via godotenv).
+// Backend se mantiene como campo por si en el futuro se vuelven a soportar
+// más, pero hoy cualquier valor != "env" devuelve error de validación.
 type SecretsConfig struct {
-	Backend   string `yaml:"backend"`    // "env" (default) | "ssm"
+	Backend    string `yaml:"backend"`     // "env" (default)
 	DotenvPath string `yaml:"dotenv_path"` // default ".env"
-	SSMPrefix string `yaml:"ssm_prefix"` // required if backend=ssm
-	SSMRegion string `yaml:"ssm_region"` // optional; defaults to AWS_REGION
 }
 
 // NotifierConfig picks how alerts are delivered. "dryrun" prints the email
 // to stdout (and writes the HTML to disk) — used for local development.
 type NotifierConfig struct {
-	Backend string     `yaml:"backend"` // "dryrun" | "smtp" | "ses"
-	SMTP    SMTPConfig `yaml:"smtp"`
-	SES     SESConfig  `yaml:"ses"`
+	Backend string       `yaml:"backend"` // "dryrun" | "smtp"
+	SMTP    SMTPConfig   `yaml:"smtp"`
 	DryRun  DryRunConfig `yaml:"dryrun"`
 }
 
@@ -124,44 +121,20 @@ type SMTPConfig struct {
 	To       []string `yaml:"to"`
 }
 
-type SESConfig struct {
-	From   string   `yaml:"from"`
-	To     []string `yaml:"to"`
-	Region string   `yaml:"region"` // optional, defaults to AWS_REGION
-}
-
 type DryRunConfig struct {
 	HTMLPath string `yaml:"html_path"` // writes the HTML body here for inspection
 }
 
-// StateConfig — alert-dedup persistence.
-//   backend=file: path on local disk.
-//   backend=s3:   bucket + key.
+// StateConfig — alert-dedup persistence en disco.
 type StateConfig struct {
-	Backend string `yaml:"backend"` // "file" (default) | "s3"
-	Path    string `yaml:"path"`    // when backend=file
-	S3      StateS3Config `yaml:"s3"`
+	Backend string `yaml:"backend"` // "file" (default)
+	Path    string `yaml:"path"`
 }
 
-type StateS3Config struct {
-	Bucket string `yaml:"bucket"`
-	Key    string `yaml:"key"`
-	Region string `yaml:"region"`
-}
-
-// InventoryConfig — full snapshot persistence (written every run).
-//   backend=file: single path, overwritten.
-//   backend=s3:   one dated object per run under key_prefix (history).
+// InventoryConfig — full snapshot persistence en disco (overwrite cada run).
 type InventoryConfig struct {
-	Backend string `yaml:"backend"` // "file" (default) | "s3"
-	Path    string `yaml:"path"`    // when backend=file
-	S3      InventoryS3Config `yaml:"s3"`
-}
-
-type InventoryS3Config struct {
-	Bucket    string `yaml:"bucket"`
-	KeyPrefix string `yaml:"key_prefix"`
-	Region    string `yaml:"region"`
+	Backend string `yaml:"backend"` // "file" (default)
+	Path    string `yaml:"path"`
 }
 
 func Load(path string) (*Config, error) {
@@ -232,7 +205,6 @@ func (c *Config) applyDefaults() {
 	// direcciones separadas por coma (típico cuando el YAML expande un único
 	// ${SMTP_TO} env var con CSV). Lo expandimos a [] de strings limpios.
 	c.Notifier.SMTP.To = flattenCSV(c.Notifier.SMTP.To)
-	c.Notifier.SES.To = flattenCSV(c.Notifier.SES.To)
 }
 
 // flattenCSV expande entradas con valores separados por coma y descarta los

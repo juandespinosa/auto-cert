@@ -1,6 +1,8 @@
-# Config local (cmd/monitor). Lambda usa configs/config.lambda.yaml.
+# Config para cmd/monitor (server on-prem corrido vía cron).
 #
-# Convención: secretos como ${VAR} se resuelven con .env (cargado al startup).
+# Convención: secretos como ${VAR} se resuelven con .env (cargado al startup
+# por internal/secrets). El binario solo soporta backends locales (file/SMTP);
+# los backends cloud (S3/SES/SSM) se quitaron junto con el path Lambda.
 
 discovery:
   route53:
@@ -36,14 +38,14 @@ rdap:
   # ~80% de las llamadas HTTP. TTL recomendado 7d (las fechas de expiración
   # de dominios cambian anualmente). backend=none lo desactiva.
   cache:
-    backend: file       # none | file | s3
+    backend: file       # none | file
     ttl: 168h           # 7 días
     path: state/rdap-cache.json
-    # s3: { bucket: ..., key: ..., region: ... }  # cuando backend=s3
 
 thresholds: [30, 15, 7, 3]
 
-# Secrets local: lee .env. En Lambda usa "ssm".
+# Secrets: lee .env via godotenv. Único backend soportado tras la limpieza
+# del path Lambda.
 secrets:
   backend: env
   dotenv_path: .env
@@ -62,11 +64,6 @@ notifier:
     from: ${SMTP_FROM}
     to:
       - ${SMTP_TO}
-  ses:
-    from: ${SES_FROM}
-    to:
-      - ${SES_TO}
-    region: us-east-1
 
 # Estado local: archivo JSON.
 state:

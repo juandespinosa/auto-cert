@@ -24,8 +24,8 @@ func writeFile(path string, data []byte) error {
 }
 
 // Attachment es un adjunto opcional del correo (ej. inventario .xlsx). El
-// runner lo construye y se lo pasa al notifier; cada backend decide cómo
-// encajarlo (multipart/mixed para SMTP, raw MIME para SES).
+// runner lo construye y se lo pasa al notifier (SMTP lo enchufa en
+// multipart/mixed; DryRun solo loguea metadata).
 type Attachment struct {
 	Filename    string
 	ContentType string // ej. "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -109,7 +109,7 @@ func (s *SMTP) Notify(alerts []model.Alert, summary Summary, attachments []Attac
 // BuildMIME returns a properly formatted RFC 822 message. Without attachments
 // uses multipart/alternative (plain + html); with attachments wraps that in a
 // multipart/mixed so clients render the body normally Y muestran el adjunto
-// abajo. Exportada porque SES también la usa via SendEmail(Raw=...).
+// abajo.
 func BuildMIME(from string, to []string, subject, plain, htmlBody string, attachments []Attachment) ([]byte, error) {
 	// 1. Construir el bloque multipart/alternative (text + html).
 	var altBuf bytes.Buffer

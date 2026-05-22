@@ -1,6 +1,6 @@
-// Package runner is the shared pipeline: discovery → RDAP → TLS → alert →
-// state filter → notify → state save. Both cmd/monitor (CLI) and cmd/lambda
-// (Lambda handler) import this so the business logic lives in one place.
+// Package runner is the pipeline: discovery → RDAP → TLS → alert → state
+// filter → notify → state save. cmd/monitor lo importa; vivir acá deja la
+// lógica de negocio aislada del entrypoint.
 package runner
 
 import (
@@ -22,8 +22,8 @@ import (
 )
 
 // Deps bundles the pluggable dependencies. main() builds these from config
-// (file/S3 storage, SMTP/SES/DryRun notifier, optional RDAP cache) and hands
-// them to Run.
+// (file storage, SMTP/DryRun notifier, optional RDAP cache) and hands them
+// a Run.
 type Deps struct {
 	Config    *config.Config
 	State     state.Store

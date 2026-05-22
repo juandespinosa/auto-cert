@@ -69,8 +69,8 @@ func Enrich(ctx context.Context, c Looker, domains []model.Domain, opts Options)
 			}
 		}()
 	}
-	// Producer respects ctx.Done() so a SIGINT/Lambda timeout doesn't deadlock
-	// when workers are all stuck on slow Lookups.
+	// Producer respects ctx.Done() so a SIGINT / context cancel no deja
+	// deadlock cuando los workers están atascados en Lookups lentos.
 	for _, g := range groups {
 		select {
 		case jobs <- g:

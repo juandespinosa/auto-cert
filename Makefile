@@ -1,48 +1,26 @@
-# SAM invokes `build-<LogicalId>` when Metadata.BuildMethod: makefile is set
-# on the function. Target receives ARTIFACTS_DIR env var with the staging dir
-# where the bootstrap binary and bundled assets must end up.
+.PHONY: build vet test run dry-run install clean
 
-GO_BUILD_FLAGS := -ldflags="-s -w" -tags lambda.norpc -trimpath
+# Build el binario en la raíz del repo (donde lo busca scripts/cron-run.sh).
+build:
+	go build -o auto-certs ./cmd/monitor
 
-.PHONY: build-MonitorFunction local-build local-vet local-test local-run dry-run package clean
-
-# Target name MUST match the function LogicalId in template.yaml.
-build-MonitorFunction:
-	@if [ -z "$$ARTIFACTS_DIR" ]; then echo "ARTIFACTS_DIR not set (run via 'sam build')"; exit 1; fi
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) -o $$ARTIFACTS_DIR/bootstrap ./cmd/lambda
-	cp configs/config.lambda.yaml $$ARTIFACTS_DIR/
-	cp configs/static_domains.yaml $$ARTIFACTS_DIR/
-
-# ── Local helpers (run outside SAM) ──────────────────────────────────────
-
-local-build:
-	go build ./...
-
-local-vet:
+vet:
 	go vet ./...
 
-local-test:
+test:
 	go test ./...
 
-local-run:
+run:
 	go run ./cmd/monitor -config configs/config.yaml
 
 dry-run:
 	go run ./cmd/monitor -config configs/config.yaml -dry-run
 
+# install = build + apretar permisos del .env (idempotente, defensa contra
+# alguien que edita .env y deja perms abiertos por accidente).
+install: build
+	@chmod 600 .env 2>/dev/null || true
+	@echo "binario actualizado: ./auto-certs"
+
 clean:
-	rm -rf .aws-sam state/ bootstrap
-
-# ── SAM convenience ──────────────────────────────────────────────────────
-
-sam-build:
-	cd infra && sam build --template template.yaml
-
-sam-deploy: sam-build
-	cd infra && sam deploy --guided
-
-sam-validate:
-	cd infra && sam validate --template template.yaml
-
-sam-logs:
-	sam logs --stack-name auto-certs --tail
+	rm -f auto-certs

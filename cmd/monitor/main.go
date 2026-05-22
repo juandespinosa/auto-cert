@@ -1,6 +1,5 @@
-// Binary monitor is the local CLI entry point. It wires config + secrets +
-// dependencies and delegates execution to internal/runner. For Lambda use
-// cmd/lambda instead — both share the same runner.
+// Binary monitor is the CLI entry point ejecutado por cron en el server.
+// Wires config + secrets + dependencies y delega la ejecución a internal/runner.
 package main
 
 import (
@@ -28,8 +27,8 @@ func main() {
 
 	ctx := context.Background()
 
-	// Secrets first (so config's ${VAR} expansion sees them). In Lambda the
-	// SSM loader would run instead, but the CLI is local-dev only — always env.
+	// Secrets first (so config's ${VAR} expansion sees them). Único backend:
+	// .env via godotenv (godotenv.Load es no-op si el archivo no existe).
 	if err := secrets.LoadDotenv(""); err != nil {
 		slog.Warn(".env load failed", "err", err)
 	}
